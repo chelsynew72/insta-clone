@@ -10,6 +10,8 @@ import { FollowsModule } from './follows/follows.module';
 
 import { FirebaseModule } from './firebase/firebase.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { MessagesModule } from './messages/messages.module';
 
 
 @Module({
@@ -35,6 +37,8 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     CommentsModule,
     FollowsModule,
     FirebaseModule,
+    NotificationsModule,
+    MessagesModule,
   ],
 })
 export class AppModule {}
