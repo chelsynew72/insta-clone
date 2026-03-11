@@ -26,12 +26,31 @@ export class UsersService {
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
+  
 
   async findByUsername(username: string): Promise<User> {
     const user = await this.userModel.findOne({ username });
     if (!user) throw new NotFoundException('User not found');
     return user;
   }
+  async getSuggestedUsers(uid: string): Promise<User[]> {
+  // Get users that the current user is NOT following
+  // For now return random users excluding self
+  return this.userModel
+    .find({ uid: { $ne: uid } })
+    .limit(5)
+    .select('uid username avatarUrl followersCount bio');
+}
+
+async searchUsers(query: string): Promise<User[]> {
+  if (!query || query.trim().length === 0) return [];
+  return this.userModel
+    .find({
+      username: { $regex: query.trim(), $options: 'i' },
+    })
+    .limit(20)
+    .select('uid username avatarUrl followersCount bio');
+}
 
   async updateProfile(uid: string, updates: Partial<User>): Promise<User> {
     const user = await this.userModel.findOneAndUpdate(

@@ -23,6 +23,20 @@ export class PostsService {
     return post;
   }
 
+  async getPostById(postId: string): Promise<Post> {
+  const post = await this.postModel.findById(postId);
+  if (!post) throw new NotFoundException('Post not found');
+  return post;
+}
+
+async getExplorePosts(page: number = 1, limit: number = 18): Promise<Post[]> {
+  return this.postModel
+    .find()
+    .sort({ likesCount: -1, createdAt: -1 }) // most liked first
+    .skip((page - 1) * limit)
+    .limit(limit);
+}
+
   async getFeed(page: number = 1, limit: number = 10): Promise<Post[]> {
     return this.postModel
       .find()

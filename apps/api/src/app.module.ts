@@ -12,6 +12,8 @@ import { FirebaseModule } from './firebase/firebase.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { MessagesModule } from './messages/messages.module';
+import { StoriesModule } from './stories/stories.module';
+import { BlocksModule } from './blocks/blocks.module';
 
 
 
@@ -40,6 +42,8 @@ import { MessagesModule } from './messages/messages.module';
     FirebaseModule,
     NotificationsModule,
     MessagesModule,
+    StoriesModule,
+    BlocksModule,
   ],
 })
 export class AppModule {}

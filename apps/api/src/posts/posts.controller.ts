@@ -40,6 +40,18 @@ export class PostsController {
     return this.postsService.getUserPosts(uid);
   }
 
+  // GET /api/v1/posts/:id
+@Get(':id')
+@UseGuards(FirebaseAuthGuard)
+async getPost(@Param('id') id: string) {
+  return this.postsService.getPostById(id);
+}
+@Get('explore')
+@UseGuards(FirebaseAuthGuard)
+async getExplorePosts(@Query('page') page: number = 1) {
+  return this.postsService.getExplorePosts(page);
+}
+
   // DELETE /api/v1/posts/:id
   @Delete(':id')
   @UseGuards(FirebaseAuthGuard)

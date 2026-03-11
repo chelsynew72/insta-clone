@@ -4,8 +4,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/auth.store';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import CreatePostModal from '@/components/post/CreatePostModal';
+import { io, Socket } from 'socket.io-client';
+import api from '@/lib/api';
 
 export default function Sidebar({ onPostCreated }: { onPostCreated?: (post: any) => void }) {
   const pathname = usePathname();
@@ -13,6 +15,53 @@ export default function Sidebar({ onPostCreated }: { onPostCreated?: (post: any)
   const { user, setUser } = useAuthStore();
   const [showMore, setShowMore] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
+  const [notifCount, setNotifCount] = useState(0);
+  const [msgCount, setMsgCount] = useState(0);
+  const socketRef = useRef<Socket | null>(null);
+
+  // Load unread counts + listen for real-time events
+  useEffect(() => {
+    if (!user) return;
+
+    // Fetch unread notifications
+    api.get('/notifications').then(({ data }) => {
+      setNotifCount(data.filter((n: any) => !n.read).length);
+    }).catch(() => {});
+
+    // Connect socket for real-time badges
+    const connect = async () => {
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
+
+      socketRef.current = io(process.env.NEXT_PUBLIC_WS_URL!, {
+        auth: { token },
+        transports: ['websocket'],
+      });
+
+      // New notification → increment badge
+      socketRef.current.on('notification', () => {
+        if (pathname !== '/notifications') {
+          setNotifCount(c => c + 1);
+        }
+      });
+
+      // New message → increment badge
+      socketRef.current.on('message', () => {
+        if (!pathname.startsWith('/messages')) {
+          setMsgCount(c => c + 1);
+        }
+      });
+    };
+
+    connect();
+    return () => { socketRef.current?.disconnect(); };
+  }, [user]);
+
+  // Reset badges when visiting pages
+  useEffect(() => {
+    if (pathname === '/notifications') setNotifCount(0);
+    if (pathname.startsWith('/messages')) setMsgCount(0);
+  }, [pathname]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -21,31 +70,59 @@ export default function Sidebar({ onPostCreated }: { onPostCreated?: (post: any)
   };
 
   const navItems = [
-    { label: 'Home', href: '/feed', icon: (active: boolean) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? '#262626' : 'none'} stroke="#262626" strokeWidth="2">
-        <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-      </svg>
-    )},
-    { label: 'Search', href: '/search', icon: () => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
-        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-      </svg>
-    )},
-    { label: 'Explore', href: '/explore', icon: () => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
-        <circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
-      </svg>
-    )},
-    { label: 'Messages', href: '/messages', icon: () => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
-        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
-      </svg>
-    )},
-    { label: 'Notifications', href: '/notifications', icon: () => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
-        <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
-      </svg>
-    )},
+    {
+      label: 'Home',
+      href: '/feed',
+      badge: 0,
+      icon: (active: boolean) => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? '#262626' : 'none'} stroke="#262626" strokeWidth="2">
+          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      ),
+    },
+    {
+      label: 'Search',
+      href: '/search',
+      badge: 0,
+      icon: () => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      ),
+    },
+    {
+      label: 'Explore',
+      href: '/explore',
+      badge: 0,
+      icon: () => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+        </svg>
+      ),
+    },
+    {
+      label: 'Messages',
+      href: '/messages',
+      badge: msgCount,
+      icon: () => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+        </svg>
+      ),
+    },
+    {
+      label: 'Notifications',
+      href: '/notifications',
+      badge: notifCount,
+      icon: () => (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
+          <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+        </svg>
+      ),
+    },
   ];
 
   return (
@@ -53,7 +130,7 @@ export default function Sidebar({ onPostCreated }: { onPostCreated?: (post: any)
       <div style={{
         position: 'fixed', left: 0, top: 0, bottom: 0, width: '245px',
         backgroundColor: 'white', borderRight: '1px solid #dbdbdb',
-        display: 'flex', flexDirection: 'column', padding: '8px 12px', zIndex: 100
+        display: 'flex', flexDirection: 'column', padding: '8px 12px', zIndex: 100,
       }}>
         {/* Logo */}
         <div style={{ padding: '16px 12px 24px' }}>
@@ -70,7 +147,22 @@ export default function Sidebar({ onPostCreated }: { onPostCreated?: (post: any)
                   onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f0f0f0')}
                   onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                 >
-                  {item.icon(active)}
+                  {/* Icon with badge */}
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    {item.icon(active)}
+                    {item.badge > 0 && (
+                      <div style={{
+                        position: 'absolute', top: '-5px', right: '-6px',
+                        backgroundColor: '#ed4956', borderRadius: '50%',
+                        minWidth: '18px', height: '18px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '11px', fontWeight: 700, color: 'white',
+                        padding: '0 3px',
+                      }}>
+                        {item.badge > 99 ? '99+' : item.badge}
+                      </div>
+                    )}
+                  </div>
                   <span style={{ fontSize: '16px' }}>{item.label}</span>
                 </div>
               </Link>
@@ -100,13 +192,15 @@ export default function Sidebar({ onPostCreated }: { onPostCreated?: (post: any)
                 onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#f0f0f0')}
                 onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
               >
-                <div style={{ width: '24px', height: '24px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#dbdbdb', flexShrink: 0 }}>
+                <div style={{ width: '24px', height: '24px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#dbdbdb', flexShrink: 0, border: pathname.startsWith('/profile') ? '2px solid #262626' : 'none' }}>
                   {user.avatarUrl
                     ? <img src={user.avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, color: '#8e8e8e' }}>{user.username?.[0]?.toUpperCase()}</div>
+                    : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, color: '#8e8e8e' }}>
+                        {user.username?.[0]?.toUpperCase()}
+                      </div>
                   }
                 </div>
-                <span style={{ fontSize: '16px' }}>Profile</span>
+                <span style={{ fontSize: '16px', fontWeight: pathname.startsWith('/profile') ? 600 : 400 }}>Profile</span>
               </div>
             </Link>
           )}
@@ -133,7 +227,9 @@ export default function Sidebar({ onPostCreated }: { onPostCreated?: (post: any)
             onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
-              <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+              <line x1="3" y1="12" x2="21" y2="12"/>
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <line x1="3" y1="18" x2="21" y2="18"/>
             </svg>
             <span style={{ fontSize: '16px' }}>More</span>
           </div>

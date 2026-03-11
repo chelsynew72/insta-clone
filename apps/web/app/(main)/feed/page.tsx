@@ -19,8 +19,18 @@ export default function FeedPage() {
   const { ref, inView } = useInView();
 
   useEffect(() => {
+  if (!user) router.push('/login');
+}, [user]);
+
+
+useEffect(() => {
+ 
+  
+  const timer = setTimeout(() => {
     if (!user) router.push('/login');
-  }, [user]);
+  }, 500);
+  return () => clearTimeout(timer);
+}, [user]);
 
   const fetchPosts = useCallback(async () => {
     if (loading || !hasMore) return;

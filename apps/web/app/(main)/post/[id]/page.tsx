@@ -22,13 +22,16 @@ export default function PostPage() {
   const socketRef = useRef<Socket | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    Promise.all([
-      api.get(`/posts/user/${id}`).catch(() => null),
-      api.get(`/comments/${id}`),
-    ]).then(([, commentsRes]) => {
-      setComments(commentsRes.data);
-    }).finally(() => setLoading(false));
+ useEffect(() => {
+  Promise.all([
+    api.get(`/posts/${id}`),
+    api.get(`/comments/${id}`),
+  ]).then(([postRes, commentsRes]) => {
+    setPost(postRes.data);
+    setLiked(postRes.data.likes?.includes(user?.uid));
+    setLikesCount(postRes.data.likesCount || 0);
+    setComments(commentsRes.data);
+  }).finally(() => setLoading(false));
 
     const connect = async () => {
       const token = await auth.currentUser?.getIdToken();

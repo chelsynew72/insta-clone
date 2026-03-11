@@ -5,33 +5,67 @@ import { useAuthStore } from '@/store/auth.store';
 import api from '@/lib/api';
 import Sidebar from '@/components/layout/Sidebar';
 import Link from 'next/link';
+import EditProfileModal from '@/components/profile/EditProfileModal';
+import toast from 'react-hot-toast';
 
 export default function ProfilePage() {
   const { uid } = useParams();
   const { user } = useAuthStore();
   const [profile, setProfile] = useState<any>(null);
+  const [showEdit, setShowEdit] = useState(false);
   const [posts, setPosts] = useState<any[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [showOptions, setShowOptions] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'tagged'>('posts');
 
   const isOwnProfile = user?.uid === uid;
 
-  useEffect(() => {
-    const fetch = async () => {
-      try {
-        const [profileRes, postsRes] = await Promise.all([
-          api.get(`/users/${uid}`),
-          api.get(`/posts/user/${uid}`),
+useEffect(() => {
+  if (!user) return;
+
+  const fetchData = async () => {
+    try {
+      const [profileRes, postsRes] = await Promise.all([
+        api.get(`/users/${uid}`),
+        api.get(`/posts/user/${uid}`),
+      ]);
+      setProfile(profileRes.data.user);
+      setPosts(postsRes.data);
+
+      if (!isOwnProfile) {
+        const [followingRes, blocksRes] = await Promise.all([
+          api.get(`/follows/${user.uid}/following`),
+          api.get('/blocks'),
         ]);
-        setProfile(profileRes.data.user);
-        setPosts(postsRes.data);
-      } finally {
-        setLoading(false);
+
+        // DEBUG — remove after fixing
+        console.log('=== FOLLOW DEBUG ===');
+        console.log('current user uid:', user.uid);
+        console.log('profile uid:', uid);
+        console.log('following data:', JSON.stringify(followingRes.data, null, 2));
+
+        const match = followingRes.data.find((f: any) => f.followingId === uid);
+        console.log('match found:', match);
+
+        setIsFollowing(
+          followingRes.data.some((f: any) => f.followingId === uid)
+        );
+        setIsBlocked(
+          blocksRes.data.some((b: any) => b.blockedUid === uid)
+        );
       }
-    };
-    fetch();
-  }, [uid]);
+    } catch (err) {
+      console.error('Profile fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchData();
+}, [uid, user]);
+  
 
   const handleFollow = async () => {
     if (isFollowing) {
@@ -43,6 +77,24 @@ export default function ProfilePage() {
       setProfile((p: any) => ({ ...p, followersCount: p.followersCount + 1 }));
       await api.post(`/follows/${uid}`);
     }
+  };
+
+  const handleBlock = async () => {
+    if (isBlocked) {
+      await api.delete(`/blocks/${uid}`);
+      setIsBlocked(false);
+      toast.success('User unblocked');
+    } else {
+      await api.post(`/blocks/${uid}`);
+      setIsBlocked(true);
+      // Also unfollow if blocking
+      if (isFollowing) {
+        await api.delete(`/follows/${uid}`);
+        setIsFollowing(false);
+      }
+      toast.success('User blocked');
+    }
+    setShowOptions(false);
   };
 
   if (loading) return (
@@ -63,6 +115,13 @@ export default function ProfilePage() {
         {/* Profile header */}
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '80px', padding: '0 20px 44px' }}>
 
+          {showEdit && (
+            <EditProfileModal
+              onClose={() => setShowEdit(false)}
+              onSaved={(updated) => setProfile(updated)}
+            />
+          )}
+
           {/* Avatar */}
           <div style={{ flexShrink: 0 }}>
             <div style={{ width: '150px', height: '150px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#dbdbdb', border: '1px solid #dbdbdb' }}>
@@ -77,35 +136,97 @@ export default function ProfilePage() {
 
           {/* Info */}
           <div style={{ flex: 1 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' }}>
               <h2 style={{ fontWeight: 300, fontSize: '28px', color: '#262626' }}>{profile?.username}</h2>
 
               {isOwnProfile ? (
-                <button style={{ padding: '7px 16px', backgroundColor: 'transparent', border: '1px solid #dbdbdb', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', color: '#262626' }}>
+                <button
+                  onClick={() => setShowEdit(true)}
+                  style={{ padding: '7px 16px', backgroundColor: 'transparent', border: '1px solid #dbdbdb', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', color: '#262626' }}
+                >
                   Edit profile
                 </button>
               ) : (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    onClick={handleFollow}
-                    style={{
-                      padding: '7px 16px',
-                      borderRadius: '8px',
-                      fontWeight: 600,
-                      fontSize: '14px',
-                      cursor: 'pointer',
-                      backgroundColor: isFollowing ? 'transparent' : '#0095f6',
-                      color: isFollowing ? '#262626' : 'white',
-                      border: isFollowing ? '1px solid #dbdbdb' : 'none',
-                    } as any}
-                  >
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </button>
-                  <Link href={`/messages/${uid}`}>
-                    <button style={{ padding: '7px 16px', backgroundColor: 'transparent', border: '1px solid #dbdbdb', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', color: '#262626' }}>
-                      Message
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {/* Follow button — hidden if blocked */}
+                  {!isBlocked && (
+                    <button
+                      onClick={handleFollow}
+                      style={{
+                        padding: '7px 16px', borderRadius: '8px', fontWeight: 600,
+                        fontSize: '14px', cursor: 'pointer', border: 'none',
+                        backgroundColor: isFollowing ? 'transparent' : '#0095f6',
+                        color: isFollowing ? '#262626' : 'white',
+                        outline: isFollowing ? '1px solid #dbdbdb' : 'none',
+                      } as any}
+                    >
+                      {isFollowing ? 'Following' : 'Follow'}
                     </button>
-                  </Link>
+                  )}
+
+                  {/* Message button — hidden if blocked */}
+                  {!isBlocked && (
+                    <Link href={`/messages/${uid}`}>
+                      <button style={{ padding: '7px 16px', backgroundColor: 'transparent', border: '1px solid #dbdbdb', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', color: '#262626' }}>
+                        Message
+                      </button>
+                    </Link>
+                  )}
+
+                  {/* 3-dot options */}
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={() => setShowOptions(s => !s)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '8px', display: 'flex', alignItems: 'center' }}
+                    >
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="#262626">
+                        <circle cx="5" cy="12" r="1.5"/>
+                        <circle cx="12" cy="12" r="1.5"/>
+                        <circle cx="19" cy="12" r="1.5"/>
+                      </svg>
+                    </button>
+
+                    {showOptions && (
+                      <>
+                        {/* Close backdrop */}
+                        <div onClick={() => setShowOptions(false)} style={{ position: 'fixed', inset: 0, zIndex: 99 }} />
+
+                        {/* Dropdown */}
+                        <div style={{ position: 'absolute', right: 0, top: '40px', backgroundColor: 'white', border: '1px solid #dbdbdb', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.15)', zIndex: 100, minWidth: '220px', overflow: 'hidden' }}>
+                          <button
+                            onClick={handleBlock}
+                            style={{ width: '100%', padding: '14px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '14px', color: '#ed4956', fontWeight: 700, borderBottom: '1px solid #efefef' }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fafafa')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                          >
+                            {isBlocked ? '✓ Unblock' : 'Block'}
+                          </button>
+                          <button
+                            style={{ width: '100%', padding: '14px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '14px', color: '#ed4956', fontWeight: 600, borderBottom: '1px solid #efefef' }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fafafa')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                          >
+                            Report
+                          </button>
+                          <button
+                            style={{ width: '100%', padding: '14px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '14px', color: '#262626', borderBottom: '1px solid #efefef' }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fafafa')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                          >
+                            Restrict
+                          </button>
+                          <button
+                            onClick={() => setShowOptions(false)}
+                            style={{ width: '100%', padding: '14px 16px', background: 'none', border: 'none', textAlign: 'left', cursor: 'pointer', fontSize: '14px', color: '#262626' }}
+                            onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fafafa')}
+                            onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -117,7 +238,7 @@ export default function ProfilePage() {
                 { label: 'followers', value: profile?.followersCount || 0 },
                 { label: 'following', value: profile?.followingCount || 0 },
               ].map(stat => (
-                <div key={stat.label} style={{ textAlign: 'center' }}>
+                <div key={stat.label}>
                   <span style={{ fontWeight: 600, fontSize: '16px', color: '#262626' }}>{stat.value.toLocaleString()}</span>
                   <span style={{ color: '#262626', fontSize: '16px' }}> {stat.label}</span>
                 </div>
@@ -125,23 +246,45 @@ export default function ProfilePage() {
             </div>
 
             {/* Bio */}
-            <div>
-              {profile?.bio && <p style={{ fontSize: '14px', color: '#262626', whiteSpace: 'pre-wrap' }}>{profile.bio}</p>}
-            </div>
+            {profile?.bio && (
+              <p style={{ fontSize: '14px', color: '#262626', whiteSpace: 'pre-wrap' }}>{profile.bio}</p>
+            )}
           </div>
         </div>
+
+        {/* Blocked banner */}
+        {isBlocked && (
+          <div style={{ margin: '0 20px 24px', padding: '16px', backgroundColor: '#fafafa', border: '1px solid #dbdbdb', borderRadius: '8px', textAlign: 'center' }}>
+            <p style={{ fontWeight: 600, fontSize: '14px', color: '#262626', marginBottom: '4px' }}>You've blocked this account</p>
+            <p style={{ fontSize: '14px', color: '#8e8e8e', marginBottom: '12px' }}>You can't see their posts while they're blocked.</p>
+            <button
+              onClick={handleBlock}
+              style={{ padding: '7px 16px', backgroundColor: 'transparent', border: '1px solid #dbdbdb', borderRadius: '8px', fontWeight: 600, fontSize: '14px', cursor: 'pointer', color: '#262626' }}
+            >
+              Unblock
+            </button>
+          </div>
+        )}
 
         {/* Tabs */}
         <div style={{ borderTop: '1px solid #dbdbdb', display: 'flex', justifyContent: 'center', gap: '48px' }}>
           {[
             { key: 'posts', label: 'POSTS', icon: (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
             )},
             { key: 'saved', label: 'SAVED', icon: (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/>
+              </svg>
             )},
             { key: 'tagged', label: 'TAGGED', icon: (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+                <line x1="7" y1="7" x2="7.01" y2="7"/>
+              </svg>
             )},
           ].map(tab => (
             <button
@@ -149,21 +292,21 @@ export default function ProfilePage() {
               onClick={() => setActiveTab(tab.key as any)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '16px 0', background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: '12px', fontWeight: 600, letterSpacing: '1px',
+                padding: '16px 0', background: 'none', border: 'none',
+                cursor: 'pointer', fontSize: '12px', fontWeight: 600,
+                letterSpacing: '1px',
                 color: activeTab === tab.key ? '#262626' : '#8e8e8e',
                 borderTop: activeTab === tab.key ? '1px solid #262626' : '1px solid transparent',
                 marginTop: '-1px',
               }}
             >
-              {tab.icon}
-              {tab.label}
+              {tab.icon}{tab.label}
             </button>
           ))}
         </div>
 
-        {/* Posts grid */}
-        {activeTab === 'posts' && (
+        {/* Posts grid — hidden if blocked */}
+        {activeTab === 'posts' && !isBlocked && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '3px', padding: '3px 0' }}>
             {posts.length === 0 && (
               <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '80px 0', color: '#8e8e8e' }}>
@@ -177,7 +320,8 @@ export default function ProfilePage() {
             )}
             {posts.map(post => (
               <Link key={post._id} href={`/post/${post._id}`}>
-                <div style={{ position: 'relative', paddingBottom: '100%', backgroundColor: '#dbdbdb', overflow: 'hidden', cursor: 'pointer' }}
+                <div
+                  style={{ position: 'relative', paddingBottom: '100%', backgroundColor: '#dbdbdb', overflow: 'hidden', cursor: 'pointer' }}
                   onMouseEnter={e => { const o = e.currentTarget.querySelector('.overlay') as HTMLElement; if (o) o.style.opacity = '1'; }}
                   onMouseLeave={e => { const o = e.currentTarget.querySelector('.overlay') as HTMLElement; if (o) o.style.opacity = '0'; }}
                 >
@@ -217,6 +361,8 @@ export default function ProfilePage() {
             <p style={{ fontSize: '14px', marginTop: '8px' }}>When people tag you in photos, they'll appear here.</p>
           </div>
         )}
+
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
   );
