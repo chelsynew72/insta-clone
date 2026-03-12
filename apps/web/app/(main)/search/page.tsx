@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
+import { useAuthStore } from '@/store/auth.store';
 import api from '@/lib/api';
 import Sidebar from '@/components/layout/Sidebar';
 import Link from 'next/link';
@@ -12,13 +13,32 @@ export default function SearchPage() {
   const debounceRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   useEffect(() => {
-    if (!query.trim()) { setResults([]); return; }
+    if (!query.trim()) { 
+      setResults([]); 
+      setFollowing(new Set());
+      return; 
+    }
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
         const { data } = await api.get(`/users/search?q=${encodeURIComponent(query)}`);
         setResults(data);
+        // Populate initial following state for search results
+        if (data.length > 0) {
+          Promise.all(
+            data.map((u: any) =>
+              api.get(`/follows/${u.uid}/is-following`)
+                .then(({ data }) => ({ uid: u.uid, isFollowing: data.isFollowing }))
+                .catch(() => ({ uid: u.uid, isFollowing: false }))
+            )
+          ).then((resultsCheck) => {
+            const followingUids = resultsCheck
+              .filter((r: any) => r.isFollowing)
+              .map((r: any) => r.uid);
+            setFollowing(new Set(followingUids));
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -27,19 +47,52 @@ export default function SearchPage() {
   }, [query]);
 
   const handleFollow = async (uid: string) => {
-    if (following.has(uid)) {
-      setFollowing(prev => { const s = new Set(prev); s.delete(uid); return s; });
-      await api.delete(`/follows/${uid}`);
+    const wasFollowing = following.has(uid);
+    // Optimistic update
+    if (wasFollowing) {
+      setFollowing((prev) => {
+        const s = new Set(prev);
+        s.delete(uid);
+        return s;
+      });
     } else {
-      setFollowing(prev => new Set([...prev, uid]));
-      await api.post(`/follows/${uid}`);
+      setFollowing((prev) => new Set([...prev, uid]));
+    }
+    try {
+      if (wasFollowing) {
+        await api.delete(`/follows/${uid}`);
+      } else {
+        await api.post(`/follows/${uid}`);
+      }
+      // Sync after API success
+      const { data } = await api.get(`/follows/${uid}/is-following`);
+      if (data.isFollowing) {
+        setFollowing((prev) => new Set([...prev, uid]));
+      } else {
+        setFollowing((prev) => {
+          const s = new Set(prev);
+          s.delete(uid);
+          return s;
+        });
+      }
+    } catch (error) {
+      // Revert on error
+      if (wasFollowing) {
+        setFollowing((prev) => new Set([...prev, uid]));
+      } else {
+        setFollowing((prev) => {
+          const s = new Set(prev);
+          s.delete(uid);
+          return s;
+        });
+      }
     }
   };
 
   return (
     <div style={{ backgroundColor: '#fafafa', minHeight: '100vh' }}>
       <Sidebar />
-      <div style={{ marginLeft: '245px', display: 'flex', justifyContent: 'center', paddingTop: '30px' }}>
+      <div style={{ marginLeft: 'clamp(0px, 245px, 245px)', paddingLeft: '16px', paddingRight: '16px', paddingBottom: '80px' }}>
         <div style={{ width: '100%', maxWidth: '600px' }}>
 
           {/* Search input */}

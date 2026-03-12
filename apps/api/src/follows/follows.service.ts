@@ -52,4 +52,12 @@ export class FollowsService {
   async getFollowing(uid: string) {
     return this.followModel.find({ followerId: uid });
   }
+  
+  async isFollowing(followerId: string, followingId: string): Promise<boolean> {
+    const follow = await this.followModel.findOne({
+      followerId: followerId,
+      followingId: followingId,
+    }).exec();
+    return !!follow;
+  }
 }

@@ -5,6 +5,14 @@ import { FirebaseAuthGuard } from '../common/guards/firebase-auth.guard';
 @Controller('follows')
 export class FollowsController {
   constructor(private followsService: FollowsService) {}
+  
+  // GET /api/v1/follows/:uid/is-following
+  @Get(':uid/is-following')
+  @UseGuards(FirebaseAuthGuard)
+  async checkIsFollowing(@Param('uid') uid: string, @Req() req: any) {
+    const isFollowing = await this.followsService.isFollowing(req.user.uid, uid);
+    return { isFollowing: !!isFollowing };
+  }
 
   // POST /api/v1/follows/:uid
   @Post(':uid')
@@ -33,4 +41,5 @@ export class FollowsController {
   async getFollowing(@Param('uid') uid: string) {
     return this.followsService.getFollowing(uid);
   }
+
 }

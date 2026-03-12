@@ -11,19 +11,70 @@ export default function SuggestedUsers() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user) return;
     api.get('/users/suggested')
-      .then(({ data }) => setSuggested(data))
+      .then(({ data }) => {
+        setSuggested(data);
+        // Populate initial following state
+        if (data.length > 0) {
+          Promise.all(
+            data.map((s: any) =>
+              api.get(`/follows/${s.uid}/is-following`)
+                .then(({ data }) => ({ uid: s.uid, isFollowing: data.isFollowing }))
+                .catch(() => ({ uid: s.uid, isFollowing: false }))
+            )
+          ).then((results) => {
+            const followingUids = results
+              .filter((r: any) => r.isFollowing)
+              .map((r: any) => r.uid);
+            setFollowing(new Set(followingUids));
+          });
+        }
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [user]);
 
   const handleFollow = async (uid: string) => {
-    if (following.has(uid)) {
-      setFollowing(prev => { const s = new Set(prev); s.delete(uid); return s; });
-      await api.delete(`/follows/${uid}`);
+    const wasFollowing = following.has(uid);
+    // Optimistic update
+    if (wasFollowing) {
+      setFollowing((prev) => {
+        const s = new Set(prev);
+        s.delete(uid);
+        return s;
+      });
     } else {
-      setFollowing(prev => new Set([...prev, uid]));
-      await api.post(`/follows/${uid}`);
+      setFollowing((prev) => new Set([...prev, uid]));
+    }
+    try {
+      if (wasFollowing) {
+        await api.delete(`/follows/${uid}`);
+      } else {
+        await api.post(`/follows/${uid}`);
+      }
+      // Sync after API success
+      const { data } = await api.get(`/follows/${uid}/is-following`);
+      if (data.isFollowing) {
+        setFollowing((prev) => new Set([...prev, uid]));
+      } else {
+        setFollowing((prev) => {
+          const s = new Set(prev);
+          s.delete(uid);
+          return s;
+        });
+      }
+    } catch (error) {
+      // Revert on error
+      if (wasFollowing) {
+        setFollowing((prev) => new Set([...prev, uid]));
+      } else {
+        setFollowing((prev) => {
+          const s = new Set(prev);
+          s.delete(uid);
+          return s;
+        });
+      }
     }
   };
 

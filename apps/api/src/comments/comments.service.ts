@@ -19,44 +19,38 @@ export class CommentsService {
   ) {}
 
   async addComment(uid: string, postId: string, text: string) {
-    // Get commenter's profile
-    const user = await this.usersService.findByUid(uid);
+  const user = await this.usersService.findByUid(uid);
+  if (!user) throw new NotFoundException('User not found');
 
-    // Save comment to MongoDB
-    const comment = await this.commentModel.create({
-      uid,
-      username: user.username,
+  const comment = await this.commentModel.create({
+    uid,
+    username: user.username,
+    postId,
+    text,
+  });
+
+  const post = await this.postsService['postModel'].findByIdAndUpdate(
+    postId,
+    { $inc: { commentsCount: 1 } },
+    { new: true },
+  );
+
+  this.eventsGateway.server.emit('newComment', comment);
+
+  if (post && post.uid !== uid) {
+    const notification = await this.gatewayService.saveNotification({
+      toUid: post.uid,
+      fromUid: uid,
+      fromUsername: user.username,
+      type: NotificationType.COMMENT,
       postId,
-      text,
+      text: text.slice(0, 50),
     });
-
-    // Increment comments count on post
-    const post = await this.postsService['postModel'].findByIdAndUpdate(
-      postId,
-      { $inc: { commentsCount: 1 } },
-      { new: true },
-    );
-
-    // Broadcast new comment to ALL connected clients in real-time
-    this.eventsGateway.server.emit('newComment', comment);
-
-    // Send notification to post owner (if not commenting on own post)
-    if (post && post.uid !== uid) {
-      const notification = await this.gatewayService.saveNotification({
-        toUid: post.uid,
-        fromUid: uid,
-        fromUsername: user.username,
-        type: NotificationType.COMMENT,
-        postId,
-        text: text.slice(0, 50), // preview
-      });
-
-      // Send real-time notification to post owner if online
-      this.eventsGateway.sendNotification(post.uid, notification);
-    }
-
-    return comment;
+    this.eventsGateway.sendNotification(post.uid, notification);
   }
+
+  return comment;
+}
 
   async getComments(postId: string) {
     return this.commentModel

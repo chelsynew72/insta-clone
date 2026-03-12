@@ -85,3 +85,42 @@ body {
   cursor: pointer;
 }
 .ig-footer-links a:hover { text-decoration: underline; }
+
+/* Responsive breakpoints */
+@media (max-width: 768px) {
+  :root {
+    --sidebar-width: 0px;
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
+
+/* Profile page responsive */
+@media (max-width: 768px) {
+  .profile-header {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 16px !important;
+    text-align: center;
+  }
+
+  .profile-stats {
+    justify-content: center !important;
+  }
+
+  .profile-avatar {
+    width: 80px !important;
+    height: 80px !important;
+  }
+}

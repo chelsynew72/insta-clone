@@ -47,7 +47,7 @@ export default function ExplorePage() {
   return (
     <div style={{ backgroundColor: '#fafafa', minHeight: '100vh' }}>
       <Sidebar />
-      <div style={{ marginLeft: '245px', paddingTop: '30px', maxWidth: '935px', margin: '0 auto', paddingLeft: '245px' }}>
+      <div style={{ marginLeft: 'clamp(0px, 245px, 245px)', paddingLeft: '16px', paddingRight: '16px', paddingBottom: '80px' }}>
 
         {/* Empty state */}
         {posts.length === 0 && !loading && (

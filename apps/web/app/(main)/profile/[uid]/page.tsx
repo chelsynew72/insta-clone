@@ -9,7 +9,8 @@ import EditProfileModal from '@/components/profile/EditProfileModal';
 import toast from 'react-hot-toast';
 
 export default function ProfilePage() {
-  const { uid } = useParams();
+  const params = useParams();
+const uid = Array.isArray(params.uid) ? params.uid[0] : params.uid as string;
   const { user } = useAuthStore();
   const [profile, setProfile] = useState<any>(null);
   const [showEdit, setShowEdit] = useState(false);
@@ -23,7 +24,9 @@ export default function ProfilePage() {
   const isOwnProfile = user?.uid === uid;
 
 useEffect(() => {
-  if (!user) return;
+  if (!user || !uid) return;
+
+  console.log('FETCHING — user:', user.uid, 'profile:', uid, 'own:', user.uid === uid);
 
   const fetchData = async () => {
     try {
@@ -34,30 +37,18 @@ useEffect(() => {
       setProfile(profileRes.data.user);
       setPosts(postsRes.data);
 
-      if (!isOwnProfile) {
-        const [followingRes, blocksRes] = await Promise.all([
-          api.get(`/follows/${user.uid}/following`),
+      if (user.uid !== uid) {
+        const [followRes, blocksRes] = await Promise.all([
+          api.get(`/follows/${uid}/is-following`),  // ← direct check
           api.get('/blocks'),
         ]);
 
-        // DEBUG — remove after fixing
-        console.log('=== FOLLOW DEBUG ===');
-        console.log('current user uid:', user.uid);
-        console.log('profile uid:', uid);
-        console.log('following data:', JSON.stringify(followingRes.data, null, 2));
-
-        const match = followingRes.data.find((f: any) => f.followingId === uid);
-        console.log('match found:', match);
-
-        setIsFollowing(
-          followingRes.data.some((f: any) => f.followingId === uid)
-        );
-        setIsBlocked(
-          blocksRes.data.some((b: any) => b.blockedUid === uid)
-        );
+        console.log('isFollowing response:', followRes.data);
+        setIsFollowing(followRes.data.isFollowing);
+        setIsBlocked(blocksRes.data.some((b: any) => b.blockedUid === uid));
       }
     } catch (err) {
-      console.error('Profile fetch error:', err);
+      console.error('fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -65,6 +56,10 @@ useEffect(() => {
 
   fetchData();
 }, [uid, user]);
+   
+
+
+      
   
 
   const handleFollow = async () => {
@@ -113,7 +108,7 @@ useEffect(() => {
       <div style={{ marginLeft: '245px', maxWidth: '935px', margin: '0 auto', paddingLeft: '245px', paddingTop: '30px' }}>
 
         {/* Profile header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '80px', padding: '0 20px 44px' }}>
+<div className="profile-header" style={{ display: 'flex', alignItems: 'flex-start', gap: '80px', padding: '0 20px 44px' }}>
 
           {showEdit && (
             <EditProfileModal
@@ -124,7 +119,7 @@ useEffect(() => {
 
           {/* Avatar */}
           <div style={{ flexShrink: 0 }}>
-            <div style={{ width: '150px', height: '150px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#dbdbdb', border: '1px solid #dbdbdb' }}>
+<div className="profile-avatar" style={{ width: '150px', height: '150px', borderRadius: '50%', overflow: 'hidden', backgroundColor: '#dbdbdb', border: '1px solid #dbdbdb' }}>
               {profile?.avatarUrl
                 ? <img src={profile.avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '56px', fontWeight: 300, color: '#8e8e8e' }}>
@@ -232,7 +227,7 @@ useEffect(() => {
             </div>
 
             {/* Stats */}
-            <div style={{ display: 'flex', gap: '40px', marginBottom: '20px' }}>
+<div className="profile-stats" style={{ display: 'flex', gap: '40px', marginBottom: '20px' }}>
               {[
                 { label: 'posts', value: posts.length },
                 { label: 'followers', value: profile?.followersCount || 0 },
