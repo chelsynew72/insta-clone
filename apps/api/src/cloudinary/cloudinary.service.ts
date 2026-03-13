@@ -12,6 +12,25 @@ export class CloudinaryService {
       api_secret: this.config.get('CLOUDINARY_API_SECRET'),
     });
   }
+  async uploadVideo(file: Express.Multer.File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const upload = cloudinary.uploader.upload_stream(
+      {
+        resource_type: 'video',
+        folder: 'instagram-clone/reels',
+        transformation: [
+          { width: 720, crop: 'scale' },
+          { quality: 'auto' },
+        ],
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result!.secure_url);
+      },
+    );
+    upload.end(file.buffer);
+  });
+}
 
   async uploadImage(file: Express.Multer.File): Promise<string> {
     return new Promise((resolve, reject) => {

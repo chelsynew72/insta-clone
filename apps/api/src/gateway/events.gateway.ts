@@ -86,6 +86,28 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     client.emit('messageSent', message);
   }
 
+  // Live chat message
+@SubscribeMessage('liveChatMessage')
+handleLiveChatMessage(
+  @MessageBody() data: { channelName: string; message: string; username: string },
+  @ConnectedSocket() client: Socket,
+) {
+  // Broadcast to everyone in the live channel
+  this.server.emit(`liveChat:${data.channelName}`, {
+    username: data.username,
+    message: data.message,
+    timestamp: new Date(),
+  });
+}
+
+// Live viewer joined/left
+@SubscribeMessage('liveViewerUpdate')
+handleLiveViewerUpdate(
+  @MessageBody() data: { channelName: string; count: number },
+) {
+  this.server.emit(`liveViewers:${data.channelName}`, { count: data.count });
+}
+
   // Client marks messages as read
   @SubscribeMessage('markRead')
   async handleMarkRead(

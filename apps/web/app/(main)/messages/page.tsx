@@ -5,15 +5,33 @@ import api from '@/lib/api';
 import Sidebar from '@/components/layout/Sidebar';
 import Link from 'next/link';
 import { formatDistanceToNow } from 'date-fns';
+import VideoCall from '@/components/call/VideoCall';
 
 export default function MessagesPage() {
   const { user } = useAuthStore();
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userProfiles, setUserProfiles] = useState<Record<string, any>>({});
+  const [inCall, setInCall] = useState<any | null>(null);
 
   useEffect(() => {
     api.get('/messages/conversations')
-      .then(({ data }) => setConversations(data))
+      .then(async ({ data }) => {
+        setConversations(data);
+        // Fetch profiles for all conversation partners
+        const otherUids = data.map((c: any) =>
+          c.fromUid === user?.uid ? c.toUid : c.fromUid
+        );
+        const unique = [...new Set(otherUids)] as string[];
+        const profiles = await Promise.all(
+          unique.map((uid: string) =>
+            api.get(`/users/${uid}`).then(r => ({ uid, ...r.data.user })).catch(() => ({ uid }))
+          )
+        );
+        const map: Record<string, any> = {};
+        profiles.forEach(p => { map[p.uid] = p; });
+        setUserProfiles(map);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -53,6 +71,7 @@ export default function MessagesPage() {
 
               {conversations.map((conv: any) => {
                 const otherUid = conv.fromUid === user?.uid ? conv.toUid : conv.fromUid;
+                const profile = userProfiles[otherUid];
                 return (
                   <Link key={conv._id} href={`/messages/${otherUid}`} style={{ textDecoration: 'none' }}>
                     <div
@@ -60,15 +79,39 @@ export default function MessagesPage() {
                       onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#fafafa')}
                       onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
                     >
-                      <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#dbdbdb', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: '20px', color: '#8e8e8e' }}>
-                        {otherUid[0]?.toUpperCase()}
+                      {/* Avatar */}
+                      <div style={{ width: '56px', height: '56px', borderRadius: '50%', backgroundColor: '#dbdbdb', flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: '20px', color: '#8e8e8e' }}>
+                        {profile?.avatarUrl
+                          ? <img src={profile.avatarUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : (profile?.username || otherUid)[0]?.toUpperCase()
+                        }
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontWeight: 600, fontSize: '14px', color: '#262626', marginBottom: '2px' }}>{otherUid}</p>
+                        <p style={{ fontWeight: 600, fontSize: '14px', color: '#262626', marginBottom: '2px' }}>
+                          {profile?.username || otherUid}
+                        </p>
                         <p style={{ fontSize: '14px', color: '#8e8e8e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {conv.text} · {formatDistanceToNow(new Date(conv.createdAt), { addSuffix: true })}
                         </p>
                       </div>
+
+                      {/* Video call button */}
+                      <button
+                        onClick={e => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setInCall({ uid: otherUid, username: profile?.username || otherUid });
+                        }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '6px', flexShrink: 0, opacity: 0.6 }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}
+                        title="Video call"
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#262626" strokeWidth="2">
+                          <polygon points="23 7 16 12 23 17 23 7"/>
+                          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                      </button>
                     </div>
                   </Link>
                 );
@@ -93,6 +136,17 @@ export default function MessagesPage() {
           </div>
         </div>
       </div>
+
+      {/* Video Call overlay */}
+      {inCall && (
+        <VideoCall
+          channelName={`call-${[user?.uid, inCall.uid].sort().join('-')}`}
+          role="host"
+          remoteUsername={inCall.username}
+          onEnd={() => setInCall(null)}
+        />
+      )}
+
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );

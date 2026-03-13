@@ -14,6 +14,8 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { MessagesModule } from './messages/messages.module';
 import { StoriesModule } from './stories/stories.module';
 import { BlocksModule } from './blocks/blocks.module';
+import { LiveModule } from './live/live.module';
+import { ReelsModule } from './reels/reels.module';
 
 
 
@@ -44,6 +46,8 @@ import { BlocksModule } from './blocks/blocks.module';
     MessagesModule,
     StoriesModule,
     BlocksModule,
+    LiveModule,
+    ReelsModule,
   ],
 })
 export class AppModule {}

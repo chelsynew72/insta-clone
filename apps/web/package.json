@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@swc/helpers": "^0.5.15",
+    "agora-rtc-sdk-ng": "^4.24.2",
     "axios": "^1.13.6",
     "date-fns": "^4.1.0",
     "firebase": "^12.10.0",
