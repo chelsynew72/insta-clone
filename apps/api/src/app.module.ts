@@ -10,6 +10,13 @@ import { FollowsModule } from './follows/follows.module';
 
 import { FirebaseModule } from './firebase/firebase.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { MessagesModule } from './messages/messages.module';
+import { StoriesModule } from './stories/stories.module';
+import { BlocksModule } from './blocks/blocks.module';
+import { LiveModule } from './live/live.module';
+import { ReelsModule } from './reels/reels.module';
+
 
 
 @Module({
@@ -35,6 +42,12 @@ import { CloudinaryModule } from './cloudinary/cloudinary.module';
     CommentsModule,
     FollowsModule,
     FirebaseModule,
+    NotificationsModule,
+    MessagesModule,
+    StoriesModule,
+    BlocksModule,
+    LiveModule,
+    ReelsModule,
   ],
 })
 export class AppModule {}
