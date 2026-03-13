@@ -36,6 +36,11 @@ export default function PostCard({ post, onDelete }: Props) {
           setComments(prev => [comment, ...prev]);
         }
       });
+      socketRef.current.on('postLiked', (data: any) => {
+        if (data.postId === post._id) {
+          setLikesCount(data.likesCount);
+        }
+      });
     };
     connect();
     return () => { socketRef.current?.disconnect(); };

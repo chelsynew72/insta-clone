@@ -21,6 +21,7 @@ export class LikesService {
     if (existing) return { message: 'Already liked' };
 
     await this.likeModel.create({ uid, postId });
+
     const post = await this.postsService['postModel'].findByIdAndUpdate(
       postId,
       { $inc: { likesCount: 1 }, $push: { likes: uid } },
@@ -28,7 +29,14 @@ export class LikesService {
     );
     if (!post) throw new NotFoundException('Post not found');
 
-    // Save + send real-time notification to post owner
+    // ← Broadcast to ALL connected clients so other users see the update
+    this.eventsGateway.server.emit('postLiked', {
+      postId,
+      uid,
+      likesCount: post.likesCount,
+    });
+
+    // Notify post owner
     if (post.uid !== uid) {
       const notification = await this.gatewayService.saveNotification({
         toUid: post.uid,
@@ -45,12 +53,21 @@ export class LikesService {
 
   async unlikePost(uid: string, postId: string) {
     await this.likeModel.findOneAndDelete({ uid, postId });
+
     const post = await this.postsService['postModel'].findByIdAndUpdate(
       postId,
       { $inc: { likesCount: -1 }, $pull: { likes: uid } },
       { new: true },
     );
     if (!post) throw new NotFoundException('Post not found');
+
+    // ← Broadcast unlike too
+    this.eventsGateway.server.emit('postLiked', {
+      postId,
+      uid,
+      likesCount: post.likesCount,
+    });
+
     return { message: 'Post unliked', likesCount: post.likesCount };
   }
 }
