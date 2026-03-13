@@ -5,14 +5,14 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  app.enableCors({
-    origin: [
-      'http://localhost:3001',
-      'https://your-app.vercel.app', // ← update after Vercel deploy
-      /\.vercel\.app$/,
-    ],
-    credentials: true,
-  });
+ app.enableCors({
+  origin: [
+    'http://localhost:3001',
+    'https://insta-clone-dr2q.onrender.com',
+    /\.vercel\.app$/,  
+  ],
+  credentials: true,
+});
 
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
